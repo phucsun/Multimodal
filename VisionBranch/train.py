@@ -35,35 +35,29 @@ def main():
         print(f"ERROR: METADATA_PATH ({METADATA_PATH}) does not exist. Check src/config.py.")
         return
 
-    # load full metadata
     with open(METADATA_PATH, "r", encoding="utf-8") as f:
         full_metadata = json.load(f)
 
-    # build global label map
     all_moods = sorted({item["Internal Mood"] for item in full_metadata})
     label_map_global = {label: idx for idx, label in enumerate(all_moods)}
     NUM_CLASSES = len(all_moods)
     print(f"Detected {NUM_CLASSES} classes: {all_moods}")
 
-    # split by video_key stratified
     train_meta, val_meta = stratified_video_split(full_metadata, val_ratio=0.2, seed=SEED)
     print(f"Train items: {len(train_meta)}, Val items: {len(val_meta)}")
 
-    # transforms
     data_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize([0.485,0.456,0.406], [0.229,0.224,0.225])
     ])
 
-    # create datasets
     train_dataset = CustomDataset(root_dir=DATA_ROOT, metadata_source=train_meta, num_frames=NUM_FRAMES, transform=data_transform, mode='train', label_map=label_map_global)
     val_dataset = CustomDataset(root_dir=DATA_ROOT, metadata_source=val_meta, num_frames=NUM_FRAMES, transform=data_transform, mode='val', label_map=label_map_global)
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
 
-    # compute class weights
     train_label_indices = [s['label'] for s in train_dataset.samples]
     counts = np.bincount(train_label_indices, minlength=NUM_CLASSES)
     counts = np.where(counts == 0, 1, counts)  # avoid zero
@@ -71,7 +65,6 @@ def main():
     class_weights_tensor = torch.tensor(class_weights, dtype=torch.float).to(DEVICE)
     print("Class weights:", class_weights.tolist())
 
-    # model setup
     model = EmotionClassifier(num_classes=NUM_CLASSES, embed_dim=EMBED_DIM, num_frames=NUM_FRAMES, pretrained_backbone=PRETRAINED_BACKBONE, freeze_backbone=FREEZE_BACKBONE)
     model = model.to(DEVICE)
 
@@ -105,11 +98,9 @@ def main():
 
         avg_train_loss = running_loss / len(train_loader.dataset)
 
-        # validation
         val_stats = evaluate_model(model, val_loader, DEVICE, criterion=criterion)
         print(f"Epoch {epoch+1} | Train loss: {avg_train_loss:.4f} | Val loss: {val_stats['loss']:.4f} | Val acc: {val_stats['acc']:.2f}% | Val F1: {val_stats['f1']:.2f}%")
 
-        # save best
         if val_stats['f1'] > best_val_f1:
             best_val_f1 = val_stats['f1']
             ckpt_path = os.path.join(OUT_DIR, "best_model.pth")
@@ -117,8 +108,7 @@ def main():
             print(f"Saved best model to {ckpt_path} (F1 {best_val_f1:.2f}%)")
             
             label_names = [k for k, _ in sorted(label_map_global.items(), key=lambda kv: kv[1])]
-            # Optional: Uncomment to see plot during training
-            # plot_confusion_matrix(val_stats['labels'], val_stats['preds'], label_names, title=f"Confusion (epoch {epoch+1})")
+
             print(classification_report(val_stats['labels'], val_stats['preds'], target_names=label_names))
 
     print("Training finished. Best val F1:", best_val_f1)

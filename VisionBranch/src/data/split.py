@@ -42,7 +42,6 @@ def stratified_video_split(metadata: List[dict], val_ratio: float = 0.2, seed: i
     for k in val_keys:
         val_meta.extend(groups[k])
 
-    # Fallback if val is empty
     if len(val_meta) == 0 and len(train_keys) > 0:
         first_key = train_keys.pop(0)
         val_meta.extend(groups[first_key])

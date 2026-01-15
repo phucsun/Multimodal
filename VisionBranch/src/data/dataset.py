@@ -34,21 +34,18 @@ class CustomDataset(Dataset):
         self.char_zfill = int(char_zfill)
         self.cache_index_path = Path(cache_index_path) if cache_index_path is not None else None
 
-        # load metadata
         if isinstance(metadata_source, (str, Path)):
             with open(metadata_source, "r", encoding="utf-8") as f:
                 self.metadata_list = json.load(f)
         else:
             self.metadata_list = metadata_source
 
-        # label map
         if label_map is not None:
             self.label_map = label_map
         else:
             moods = sorted({item["Internal Mood"] for item in self.metadata_list})
             self.label_map = {label: idx for idx, label in enumerate(moods)}
 
-        # index images
         if self.cache_index_path and self.cache_index_path.exists():
             self.image_pool = self._load_index_cache(self.cache_index_path)
         else:
@@ -56,7 +53,6 @@ class CustomDataset(Dataset):
             if self.cache_index_path:
                 self._save_index_cache(self.cache_index_path, self.image_pool)
 
-        # build samples list
         self.samples = []
         for item in self.metadata_list:
             self._process_item(item)
@@ -76,7 +72,6 @@ class CustomDataset(Dataset):
 
         label_str = item.get("Internal Mood")
         if key not in self.image_pool:
-            # Fallback logic
             alt_vid = vid_raw
             alt_char = char_raw.zfill(self.char_zfill) if self.char_zfill else char_raw
             alt_key = f"{alt_vid}_{alt_char}"
@@ -117,7 +112,6 @@ class CustomDataset(Dataset):
                 continue
             name_no_ext = filepath.stem
             
-            # Logic parsing filename regex
             m = PATTERN_VIDEO_CHAR_FRAME.search(name_no_ext)
             if m:
                 vid_raw = m.group("video")
